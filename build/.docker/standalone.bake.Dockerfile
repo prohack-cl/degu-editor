@@ -8,7 +8,7 @@
 # ==============================================================================
 
 #### FINAL UBUNTU ####
-FROM ubuntu:24.04 AS finalubuntu
+FROM public.ecr.aws/docker/library/ubuntu:24.04 AS finalubuntu
 ARG PRODUCT_VERSION
 ARG BUILD_NUMBER
 ARG BUILD_ROOT=/package
@@ -129,3 +129,9 @@ RUN mkdir -p /home/ds && chown ds:ds /home/ds
 RUN /usr/bin/documentserver-flush-cache.sh -r false
 
 ENTRYPOINT ["/entrypoint.sh"]
+# Degú (https://github.com/prohack-cl/degu-editor, carpeta degu/): el editor bajo /editor/, detrás
+# de un balanceador. El nginx de la imagen tiene que incluir conf.d: si deja de hacerlo, mejor que
+# el build falle a que el editor arranque sin esa ruta.
+RUN grep -Eq 'include +/etc/nginx/conf\.d/\*\.conf' /etc/nginx/nginx.conf
+COPY build/configs/standalone/degu-editor.conf /etc/nginx/conf.d/degu-editor.conf
+EXPOSE 8080

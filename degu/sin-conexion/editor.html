@@ -1,0 +1,446 @@
+<!doctype html>
+<!--
+  El editor de documentos y planillas SIN CONEXIÓN de Degú Desktop (`oficina_local.py`).
+
+  Es el editor de Euro-Office de siempre (`../web-apps/apps/api/documents/api.js`). Lo que hace esta
+  página es lo que en la web hace el servidor: convertir el .docx/.xlsx al binario del editor para
+  abrirlo, y de vuelta para guardarlo, con el conversor de Euro-Office en WebAssembly
+  (`../sdkjs/common/x2t`). Lo guardado lo escribe Desktop: en el archivo del equipo, o como versión
+  nueva de la copia sin conexión de un documento de Degú, que sube al volver la conexión.
+-->
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Degú · Documento</title>
+		<style>
+			:root {
+				--fondo: #ffffff;
+				--texto: #1d1d1f;
+				--suave: #6e6e73;
+				--borde: #e5e5ea;
+				--acento: #2f7d4f;
+				--aviso: #b25000;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				height: 100%;
+				margin: 0;
+				background: var(--fondo);
+				color: var(--texto);
+				font: 14px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+			}
+			header {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				height: 44px;
+				padding: 0 12px;
+				border-bottom: 1px solid var(--borde);
+			}
+			header a,
+			header button {
+				font: inherit;
+				border: 1px solid var(--borde);
+				background: #fff;
+				border-radius: 8px;
+				padding: 5px 10px;
+				color: var(--texto);
+				text-decoration: none;
+				cursor: pointer;
+			}
+			header button.principal {
+				background: var(--acento);
+				border-color: var(--acento);
+				color: #fff;
+			}
+			header button:disabled {
+				opacity: 0.5;
+				cursor: default;
+			}
+			#titulo {
+				font-weight: 600;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			#estado {
+				color: var(--suave);
+				margin-left: auto;
+				white-space: nowrap;
+			}
+			#estado.aviso {
+				color: var(--aviso);
+			}
+			#marco {
+				height: calc(100% - 44px);
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<a id="volver" href="biblioteca.html">← Documentos</a>
+			<span id="titulo">Abriendo…</span>
+			<span id="estado" role="status" aria-live="polite">Sin conexión: se guarda en este equipo</span>
+			<button id="guardar" class="principal" disabled>Guardar</button>
+		</header>
+		<div id="marco"><div id="editor"></div></div>
+		<script>
+			(function () {
+				'use strict';
+				var inicio = performance.now();
+				var id = new URLSearchParams(location.search).get('doc') || '';
+				var API = '../__degu/';
+				var estado = document.getElementById('estado');
+				var botonGuardar = document.getElementById('guardar');
+				var editor = null;
+				var meta = null;
+				var sucio = false;
+				var guardando = null;
+				var medios = {};
+				var cuenta = 0;
+				// La huella de lo que abrió ESTE editor: si el archivo cambió en el disco mientras
+				// tanto, Desktop guarda lo de acá en una copia en vez de pisar lo del otro.
+				var base = '';
+
+				function decir(texto, aviso) {
+					estado.textContent = texto;
+					estado.className = aviso ? 'aviso' : '';
+				}
+
+				// ── El conversor (x2t en WebAssembly), una sola vez por página ──────────────────────
+				var conversor = null;
+				function x2t() {
+					if (conversor) return conversor;
+					conversor = new Promise(function (listo, falla) {
+						window.Module = {
+							noInitialRun: true,
+							locateFile: function (nombre) {
+								return '../sdkjs/common/x2t/' + nombre;
+							},
+							onRuntimeInitialized: function () {
+								['/working', '/working/media', '/working/fonts', '/working/themes'].forEach(function (d) {
+									try {
+										window.Module.FS.mkdir(d);
+									} catch (e) {}
+								});
+								listo(window.Module);
+							},
+							onAbort: falla
+						};
+						var s = document.createElement('script');
+						// Absoluta: el conversor de CryptPad lee su propia dirección con `new URL(src)`.
+						s.src = new URL('../sdkjs/common/x2t/x2t.js', location.href).href;
+						s.onerror = function () {
+							falla(new Error('no se cargó el conversor'));
+						};
+						document.head.appendChild(s);
+					});
+					return conversor;
+				}
+
+				function limpiar(FS, dir) {
+					FS.readdir(dir).forEach(function (f) {
+						if (f === '.' || f === '..') return;
+						var ruta = dir + '/' + f;
+						if (FS.isDir(FS.stat(ruta).mode)) return;
+						FS.unlink(ruta);
+					});
+				}
+
+				function convertir(M, desde, hacia) {
+					var params =
+						'<?xml version="1.0" encoding="utf-8"?>' +
+						'<TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+						'xmlns:xsd="http://www.w3.org/2001/XMLSchema">' +
+						'<m_sFileFrom>' + desde + '</m_sFileFrom>' +
+						'<m_sFileTo>' + hacia + '</m_sFileTo>' +
+						'<m_sThemeDir>/working/themes</m_sThemeDir>' +
+						'<m_bIsNoBase64>true</m_bIsNoBase64>' +
+						'</TaskQueueDataConvert>';
+					M.FS.writeFile('/working/params.xml', params);
+					var r = M.ccall('main1', 'number', ['string'], ['/working/params.xml']);
+					if (r !== 0) throw new Error('el conversor devolvió ' + r);
+					return M.FS.readFile(hacia);
+				}
+
+				// De a una: abrir y guardar comparten el sistema de archivos del conversor (`/working`), y
+				// dos a la vez se borrarían los archivos una a la otra (`kimi`).
+				var cola = Promise.resolve();
+				function enFila(trabajo) {
+					var r = cola.then(trabajo);
+					cola = r.catch(function () {});
+					return r;
+				}
+
+				function url(bytes, tipo) {
+					return URL.createObjectURL(new Blob([bytes], tipo ? { type: tipo } : {}));
+				}
+
+				// Abrir: el archivo del equipo → el binario del editor, con sus imágenes.
+				function abrirAhora() {
+					return Promise.all([
+						x2t(),
+						fetch(API + 'archivo/' + encodeURIComponent(id)).then(function (r) {
+							if (!r.ok) throw new Error('el archivo no está en este equipo');
+							base = r.headers.get('X-Degu-Huella') || '';
+							return r.arrayBuffer();
+						})
+					]).then(function (t) {
+						var M = t[0];
+						limpiar(M.FS, '/working');
+						limpiar(M.FS, '/working/media');
+						var entrada = '/working/documento.' + meta.ext;
+						M.FS.writeFile(entrada, new Uint8Array(t[1]));
+						var bin = convertir(M, entrada, '/working/Editor.bin');
+						var urls = { 'Editor.bin': url(bin) };
+						M.FS.readdir('/working/media').forEach(function (f) {
+							if (f === '.' || f === '..') return;
+							medios[f] = M.FS.readFile('/working/media/' + f);
+							urls['media/' + f] = url(medios[f]);
+						});
+						return urls;
+					});
+				}
+
+				// Guardar: el binario del editor → .docx/.xlsx, y Desktop lo escribe.
+				function guardarAhora(partes) {
+					var largo = partes.reduce(function (n, p) {
+						return n + p.length;
+					}, 0);
+					var bin = new Uint8Array(largo);
+					var en = 0;
+					partes.forEach(function (p) {
+						bin.set(p, en);
+						en += p.length;
+					});
+					return x2t()
+						.then(function (M) {
+							limpiar(M.FS, '/working');
+							limpiar(M.FS, '/working/media');
+							Object.keys(medios).forEach(function (f) {
+								M.FS.writeFile('/working/media/' + f, medios[f]);
+							});
+							M.FS.writeFile('/working/Editor.bin', bin);
+							var salida = convertir(M, '/working/Editor.bin', '/working/documento.' + meta.ext);
+							return fetch(API + 'guardar/' + encodeURIComponent(id), {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/octet-stream', 'X-Degu-Base': base },
+								body: salida
+							})
+								.then(function (r) {
+									return r.json().then(function (j) {
+										if (!r.ok || !j.ok) throw new Error(j.mensaje || 'no se pudo guardar');
+										return j;
+									});
+								})
+								.then(function (j) {
+									guardado(j);
+									return url(salida);
+								});
+						})
+						.catch(function (e) {
+							// Que se vea: un «Guardando…» que no termina hace creer que se guardó.
+							decir('No se pudo guardar: ' + (e && e.message ? e.message : e), true);
+							terminar(false);
+							throw e;
+						});
+				}
+
+				function guardado(j) {
+					if (j.huella) base = j.huella;
+					if (j.id && j.id !== id) {
+						// Se guardó aparte (otra ventana tenía el documento): este editor sigue en esa copia.
+						id = j.id;
+						history.replaceState(null, '', '?doc=' + encodeURIComponent(id));
+					}
+					// Lo escrito MIENTRAS se guardaba no está en lo guardado: sigue sin guardar (`sol`).
+					sucio = edicion !== edicionAlGuardar;
+					var hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+					if (j.conflicto) {
+						decir(j.mensaje || 'El archivo cambió mientras lo editabas: se guardó una copia.', true);
+					} else if (sucio) {
+						decir('Cambios sin guardar');
+					} else {
+						decir((meta.origen === 'degu' ? 'Guardado en este equipo; sube a Degú al volver la conexión' : 'Guardado') + ' · ' + hora);
+					}
+					terminar(true);
+				}
+
+				// ── Lo que pide el editor (`sin_conexion.js`, dentro del marco) ─────────────────────
+				window.deguLocal = {
+					soloLectura: false,
+					conexion: null,
+					avisar: function (texto) {
+						decir(texto, true);
+					},
+					abrir: function () {
+						return enFila(abrirAhora);
+					},
+					guardarBinario: function (partes) {
+						return enFila(function () {
+							return guardarAhora(partes);
+						});
+					},
+					agregarImagen: function (bytes, tipo) {
+						var ext = ((tipo || '').split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
+						var nombre = 'degu_' + Date.now().toString(36) + '_' + ++cuenta + '.' + ext;
+						medios[nombre] = bytes;
+						var r = {};
+						r['media/' + nombre] = url(bytes, tipo);
+						return r;
+					},
+					urlDeMedio: function (ruta) {
+						var nombre = String(ruta || '').replace(/^media\//, '');
+						return medios[nombre] ? url(medios[nombre]) : '';
+					},
+					guardar: guardar
+				};
+
+				// Cuántas veces cambió el documento: para saber si algo se escribió durante un guardado.
+				var edicion = 0;
+				var edicionAlGuardar = 0;
+				var alTerminar = null;
+				function terminar(ok) {
+					if (alTerminar) alTerminar(ok);
+				}
+
+				// Resuelve con `true` solo si quedó guardado: quien espera para salir no sale sin eso.
+				function guardar() {
+					if (!editor || meta.soloLectura) return Promise.resolve(true);
+					if (guardando) return guardando;
+					decir('Guardando…');
+					botonGuardar.disabled = true;
+					edicionAlGuardar = edicion;
+					guardando = new Promise(function (listo) {
+						alTerminar = listo;
+						editor.downloadAs(meta.ext);
+						// Si el editor no contesta, el botón vuelve a estar disponible; pero no cuenta como
+						// guardado, y la conversión que siga en curso termina en su turno (`enFila`).
+						setTimeout(function () {
+							listo(false);
+						}, 60000);
+					}).then(function (ok) {
+						guardando = null;
+						alTerminar = null;
+						botonGuardar.disabled = false;
+						return ok === true;
+					});
+					return guardando;
+				}
+
+				botonGuardar.addEventListener('click', guardar);
+				document.addEventListener('keydown', function (e) {
+					if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+						e.preventDefault();
+						guardar();
+					}
+				});
+				// Cada minuto, si hay cambios: lo editado no se pierde si el equipo se apaga.
+				setInterval(function () {
+					if (sucio && !guardando) guardar();
+				}, 60000);
+				document.getElementById('volver').addEventListener('click', function (e) {
+					if (!sucio) return;
+					e.preventDefault();
+					guardar().then(function (ok) {
+						// Sin guardado confirmado no se sale: lo editado sigue en pantalla (`sol`).
+						if (ok && !sucio) location.href = 'biblioteca.html';
+						else decir('No se pudo guardar: lo editado sigue aquí. Vuelve a intentar «Guardar».', true);
+					});
+				});
+
+				fetch(API + 'doc/' + encodeURIComponent(id))
+					.then(function (r) {
+						if (!r.ok) throw new Error('Ese documento no está en este equipo.');
+						return r.json();
+					})
+					.then(function (m) {
+						meta = m;
+						window.deguLocal.soloLectura = !!m.soloLectura;
+						document.title = m.nombre + ' · Degú';
+						document.getElementById('titulo').textContent = m.nombre;
+						if (m.soloLectura) decir('Solo lectura');
+						return new Promise(function (listo, falla) {
+							var s = document.createElement('script');
+							s.src = '../web-apps/apps/api/documents/api.js';
+							s.onload = listo;
+							s.onerror = function () {
+								falla(new Error('no se cargó el editor'));
+							};
+							document.head.appendChild(s);
+						});
+					})
+					.then(function () {
+						editor = new window.DocsAPI.DocEditor('editor', {
+							documentType: meta.ext === 'xlsx' ? 'cell' : 'word',
+							width: '100%',
+							height: '100%',
+							document: {
+								fileType: meta.ext,
+								key: (meta.id + '-' + meta.version).replace(/[^0-9A-Za-z_.=-]/g, '').slice(0, 120),
+								title: meta.nombre + '.' + meta.ext,
+								url: location.origin + location.pathname.replace(/degu\/editor\.html$/, '__degu/archivo/') + encodeURIComponent(id),
+								permissions: {
+									edit: !meta.soloLectura,
+									comment: !meta.soloLectura,
+									review: !meta.soloLectura,
+									download: true,
+									print: true,
+									chat: false
+								}
+							},
+							editorConfig: {
+								mode: meta.soloLectura ? 'view' : 'edit',
+								lang: 'es',
+								region: 'es-CL',
+								user: { id: 'local', name: meta.persona || 'Yo' },
+								coEditing: { mode: 'fast', change: false },
+								customization: {
+									forcesave: false,
+									compactHeader: true,
+									feedback: false,
+									help: false,
+									uiTheme: 'theme-light',
+									logo: { visible: false },
+									customer: {
+										name: 'Degú',
+										www: 'getdegu.com',
+										info:
+											'Editor basado en Euro-Office y ONLYOFFICE, con licencia AGPLv3. Conversor x2t ' +
+											'en WebAssembly de CryptPad (AGPLv3). Código fuente: https://github.com/prohack-cl/degu-editor'
+									}
+								}
+							},
+							events: {
+								onDocumentReady: function () {
+									window.deguMedicion = { abrir_ms: Math.round(performance.now() - inicio) };
+									botonGuardar.disabled = !!meta.soloLectura;
+									if (!meta.soloLectura) decir('Sin conexión: se guarda en este equipo');
+								},
+								onDocumentStateChange: function (e) {
+									if (e && e.data) {
+										edicion++;
+										sucio = true;
+										if (!guardando) decir('Cambios sin guardar');
+									}
+								},
+								// Lo guardado ya lo escribió `guardarBinario`: que el editor no lo descargue.
+								onDownloadAs: function () {},
+								onError: function (e) {
+									decir('El editor avisó un error' + (e && e.data ? ': ' + (e.data.errorDescription || e.data.errorCode) : ''), true);
+								}
+							}
+						});
+					})
+					.catch(function (e) {
+						decir(e.message || String(e), true);
+						document.getElementById('titulo').textContent = 'No se pudo abrir';
+					});
+			})();
+		</script>
+	</body>
+</html>

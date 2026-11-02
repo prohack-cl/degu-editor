@@ -1,0 +1,14 @@
+{
+  "euro_office": {
+    "version": "9.3.7",
+    "commit": "e8d67f92c8a8549ea03030af2422a2b6b5d87274",
+    "url": "https://github.com/Euro-Office/DocumentServer/releases/download/v9.3.7/euro-office-documentserver_9.3.7-0_amd64.deb",
+    "sha256": "e853d938d91bd7b15c60940010a459fd7de18a04bee04afc7dbff313b0faba8a"
+  },
+  "x2t": {
+    "version": "v9.3.2+3",
+    "fuente": "https://github.com/cryptpad/onlyoffice-x2t-wasm",
+    "url": "https://github.com/cryptpad/onlyoffice-x2t-wasm/releases/download/v9.3.2%2B3/x2t.zip",
+    "sha512": "ed0579097a0269877d6622b28b1e2718e1f9f4e8ac99301f5f13f5f052b3db24db789deab8c654044db588be103c139be74f83a0ca066dee1789522241c1af6e"
+  }
+}

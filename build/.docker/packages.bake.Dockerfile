@@ -9,7 +9,7 @@
 
 #### PACKAGE ####
 
-FROM ubuntu:24.04 AS package
+FROM public.ecr.aws/docker/library/ubuntu:24.04 AS package
 
     ARG COMPANY_NAME
     ARG COMPANY_NAME_LOW

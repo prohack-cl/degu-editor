@@ -2,7 +2,7 @@ ARG POSTGRES_VERSION="15"
 ARG MYSQL_VERSION="latest"
 ARG MARIADB_VERSION="latest"
 
-FROM fedora:43 AS ds-base
+FROM public.ecr.aws/docker/library/fedora:43 AS ds-base
 
     LABEL maintainer Euro-Office
 
@@ -250,7 +250,7 @@ FROM ds-base AS docs
     CMD ["docservice"]
 
 
-FROM node:22-alpine3.19 AS example
+FROM public.ecr.aws/docker/library/node:22-alpine3.19 AS example
     LABEL maintainer Euro-Office
 
     ENV LANG=en_US.UTF-8 \
@@ -299,11 +299,11 @@ FROM node:22-alpine3.19 AS example
 
     ENTRYPOINT ["/var/www/euro-office/documentserver-example/docker-entrypoint.sh", "npm", "start"]
 
-FROM python:3.14-bookworm AS builder
+FROM public.ecr.aws/docker/library/python:3.14-bookworm AS builder
     RUN pip install redis psycopg2  PyMySQL pika python-qpid-proton func_timeout requests kubernetes flask
 
 
-FROM python:3.14-slim-bookworm AS utils
+FROM public.ecr.aws/docker/library/python:3.14-slim-bookworm AS utils
     ARG TARGETARCH
     ARG DS_VERSION_HASH
     ENV DS_VERSION_HASH=$DS_VERSION_HASH
@@ -340,14 +340,14 @@ FROM statsd/statsd AS metrics
     ARG COMPANY_NAME_LOW=euro-office
     COPY --from=ds-service /var/www/$COMPANY_NAME_LOW/documentserver/server/Metrics/config/config.js /usr/src/app/config.js
 
-FROM postgres:$POSTGRES_VERSION AS db
+FROM public.ecr.aws/docker/library/postgres:$POSTGRES_VERSION AS db
     ARG COMPANY_NAME_LOW=euro-office
     COPY --from=ds-service /var/www/$COMPANY_NAME_LOW/documentserver/server/schema/postgresql/createdb.sql /docker-entrypoint-initdb.d/
 
-FROM mysql:$MYSQL_VERSION AS mysqldb
+FROM public.ecr.aws/docker/library/mysql:$MYSQL_VERSION AS mysqldb
     ARG COMPANY_NAME_LOW=euro-office
     COPY --chmod=777 --from=ds-service /var/www/$COMPANY_NAME_LOW/documentserver/server/schema/mysql/createdb.sql /docker-entrypoint-initdb.d/
 
-FROM mariadb:$MARIADB_VERSION AS db-mariadb
+FROM public.ecr.aws/docker/library/mariadb:$MARIADB_VERSION AS db-mariadb
     ARG COMPANY_NAME_LOW=euro-office
     COPY --from=ds-service /var/www/$COMPANY_NAME_LOW/documentserver/server/schema/mysql/createdb.sql /docker-entrypoint-initdb.d/
