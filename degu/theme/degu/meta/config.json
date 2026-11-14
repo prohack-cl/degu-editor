@@ -1,0 +1,19 @@
+{
+  "company_name": "Degú",
+  "publisher_name": "Prohack SpA",
+  "publisher_url": "https://getdegu.com",
+  "publisher_address": "",
+  "publisher_phone": "",
+  "sales_email": "",
+  "support_email": "",
+  "support_url": "https://getdegu.com",
+  "help_url": "https://getdegu.com",
+  "suggest_url": "https://github.com/prohack-cl/degu-editor/issues",
+  "app_title": "Degú",
+  "mobile_logo_light": "eo_logo_light.svg",
+  "mobile_logo_dark": "eo_logo_dark.svg",
+  "about_logo_light": "logo.svg",
+  "about_logo_dark": "logo.svg",
+  "forms_logo_light": "eo_logo_dark.svg",
+  "forms_logo_dark": "eo_logo_light.svg"
+}

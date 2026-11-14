@@ -12,7 +12,7 @@
 # ==============================================================================
 
 
-FROM alpine AS bundle
+FROM public.ecr.aws/docker/library/alpine:latest AS bundle
     ARG BUILD_ROOT=/package
     ARG PRODUCT_NAME_LOW
     ARG COMPANY_NAME_LOW

@@ -1,0 +1,31 @@
+// Menús y globos de ayuda al estilo de la app de Degú: sin el borde duro de Office, con sombra suave, un poco de aire
+// adentro y cada opción con sus esquinas. En los dos temas que pide el motor, «white» y «night».
+// Upstream: apps/common/main/resources/less/dropdown-menu.less (borde, radio y relleno de `li > a`) y tooltip.less.
+.degu-menus(@sombra; @divisor) {
+    .dropdown-menu:not(.internal-menu) {
+        border-color: transparent;
+        box-shadow: @sombra;
+        padding: 6px;
+
+        li > a {
+            border-radius: 8px;
+        }
+
+        .divider {
+            margin: 6px 4px;
+            background-color: @divisor;
+        }
+    }
+
+    .tooltip .tooltip-inner {
+        border-radius: 8px;
+    }
+}
+
+.theme-white {
+    .degu-menus(0 12px 28px -8px rgba(13, 18, 22, 0.18), 0 2px 6px 0 rgba(13, 18, 22, 0.06); #EBECEC);
+}
+
+.theme-night {
+    .degu-menus(0 12px 28px -8px rgba(0, 0, 0, 0.55), 0 2px 6px 0 rgba(0, 0, 0, 0.35); #262B28);
+}

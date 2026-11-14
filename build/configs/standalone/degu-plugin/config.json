@@ -1,0 +1,19 @@
+{
+  "name": "Degú",
+  "guid": "asc.{5F0C2A7E-9D41-4B3A-8C6E-1D2B3A4C5E6F}",
+  "version": "1.0.0",
+  "variations": [
+    {
+      "description": "Degú al lado del documento: lee lo abierto y aplica lo que Degú cambia.",
+      "url": "index.html",
+      "icons": [],
+      "type": "system",
+      "isViewer": true,
+      "EditorsSupport": ["word", "cell"],
+      "initDataType": "none",
+      "initData": "",
+      "buttons": [],
+      "events": []
+    }
+  ]
+}

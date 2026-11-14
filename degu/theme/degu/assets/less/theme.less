@@ -1,0 +1,213 @@
+// Degú: el editor de Word y Excel con la cara de Degú (el fundador, 9-nov-2026: la propuesta A, «cinta clara de Degú»,
+// «modernizando lo más posible», y que siga el modo oscuro de Degú).
+//
+// Parte de los temas modernos de Euro-Office: «white» (Modern Light) y «night» (Modern Dark), con íconos de línea,
+// barra redondeada con sombra y pestañas con raya. El motor elige uno según el modo de Degú de quien abre
+// (`editor_oficina.configuracion`, `uiTheme`). Acá se les cambian los colores, la letra y las esquinas por los de Degú
+// (`packages/design-system/css/tokens.css`). TODO va por las variables CSS del tema, como pide Euro-Office
+// (`docs/theme-less-overrides.md`): así una actualización suya no choca con reglas sueltas. Word, Excel y los demás
+// editores quedan iguales entre sí: la cinta ya no es azul en uno y verde en otro.
+//
+// Se compila AL FINAL del CSS de cada editor (Euro-Office lo importa último), así que estas variables ganan a las suyas.
+
+// La letra de Degú (`apps/web/src/app.html`), con las mismas de respaldo. El editor no restringe de dónde cargar
+// fuentes (`apps/editor/degu/nginx-editor.conf` solo fija frame-ancestors, object-src y base-uri). Aunque esto se importe
+// al final, LESS sube las `@import` de CSS al principio de la salida (comprobado con lessc 4.2.0), donde el navegador
+// las acepta.
+@import (css) url("https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap");
+
+@degu-letra: "Google Sans Flex", "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+// Sin la tira de color por editor que Euro-Office pone arriba: en Degú la cinta es la misma para todos.
+@eo-app-accent-height: 0px;
+// `overrides/header.less` de Euro-Office las usa: tienen que existir aunque la tira no se vea.
+@eo-app-accent-document: #047a64;
+@eo-app-accent-spreadsheet: #047a64;
+@eo-app-accent-presentation: #047a64;
+@eo-app-accent-pdf: #047a64;
+@eo-app-accent-drawing: #047a64;
+@nc-primary: #047a64;
+@nc-primary-dark: #08826a;
+@nc-primary-light: #0d9e81;
+@brand-primary: #047a64;
+
+// Los logos de la marca Euro-Office (la cabecera los oculta: `logo.visible = false` en la configuración del motor).
+@theme-logo-light-url: '@{common-image-const-path}/header/eo_logo_light.svg';
+@theme-logo-dark-url: '@{common-image-const-path}/header/eo_logo_dark.svg';
+@theme-about-logo-url: '@{common-image-const-path}/about/logo.svg';
+@theme-about-logo-dark-url: '@{common-image-const-path}/about/logo.svg';
+
+// ── Una sola receta para el claro y el oscuro ─────────────────────────────────────────────────────────────────────
+// Cada tema le pasa su paleta de Degú; lo que se pinta es lo mismo en los dos.
+//   @verde: el verde como texto, raya e ícono (AA sobre la barra)   @relleno: el de los botones principales
+//   @suave: el verde suave de lo activo   @pagina: alrededor de la hoja   @barra: cinta y barras
+//   @elevado: menús y ventanas   @hover: pasar el mouse   @borde / @borde-control: líneas
+//   @tinta / @tinta-2 / @tinta-3: texto principal, secundario y terciario
+.degu-tema(@verde; @relleno; @relleno-hover; @suave; @pagina; @pagina-2; @barra; @elevado; @hover; @borde; @borde-control; @tinta; @tinta-2; @tinta-3; @hoja; @hoja-borde) {
+    // La cinta: del color de las barras para todos, sin el azul de Word ni el verde de Excel.
+    --toolbar-header-document: @barra;
+    --toolbar-header-spreadsheet: @barra;
+    --toolbar-header-presentation: @barra;
+    --toolbar-header-pdf: @barra;
+    --toolbar-header-visio: @barra;
+    --text-toolbar-header-on-background-document: @verde;
+    --text-toolbar-header-on-background-spreadsheet: @verde;
+    --text-toolbar-header-on-background-presentation: @verde;
+    --text-toolbar-header-on-background-pdf: @verde;
+    --text-toolbar-header-on-background-visio: @verde;
+    // La raya de la pestaña activa, en el verde de Degú (como `PestanasDeSeccion` en la app).
+    --highlight-header-tab-underline-document: @verde;
+    --highlight-header-tab-underline-spreadsheet: @verde;
+    --highlight-header-tab-underline-presentation: @verde;
+    --highlight-header-tab-underline-pdf: @verde;
+    --highlight-header-tab-underline-visio: @verde;
+    --highlight-toolbar-tab-underline-document: @verde;
+    --highlight-toolbar-tab-underline-spreadsheet: @verde;
+    --highlight-toolbar-tab-underline-presentation: @verde;
+    --highlight-toolbar-tab-underline-pdf: @verde;
+    --highlight-toolbar-tab-underline-visio: @verde;
+    --toolbar-tab-line-height: 2px;
+    --toolbar-tab-line-radius: 2px;
+
+    // Fondos.
+    --background-normal: @elevado;
+    --background-toolbar: @barra;
+    --background-toolbar-tab: @barra;
+    --background-toolbar-additional: @pagina-2;
+    --background-pane: @barra;
+    --background-pane-additional: @pagina-2;
+    --background-statusbar: @barra;
+    --background-primary-dialog-button: @relleno;
+    --background-accent-button: @relleno;
+    --background-contrast-popover: @elevado;
+    --background-fill-input: @elevado;
+    --background-fill-input-disabled: @elevado;
+    --background-fill-input-readonly: @elevado;
+
+    // Pasar el mouse y apretar: el hover de Degú y el verde suave de lo activo.
+    --highlight-button-hover: @hover;
+    --highlight-button-pressed: @suave;
+    --highlight-button-pressed-hover: @suave;
+    --highlight-header-button-hover: @hover;
+    --highlight-header-button-pressed: @suave;
+    --highlight-header-input-hover: @hover;
+    --highlight-primary-dialog-button-hover: @relleno-hover;
+    --highlight-primary-dialog-button-pressed: @relleno-hover;
+    --highlight-category-button-hover: fade(@verde, 6%);
+    --highlight-category-button-pressed: fade(@verde, 14%);
+
+    // Bordes: pocos y suaves. Sin la línea dura bajo la cinta: la separa la sombra.
+    --border-toolbar: @borde;
+    --border-toolbar-active-panel-top: @barra;
+    --border-divider: @borde;
+    --border-regular-control: @borde-control;
+    --border-fill-input: @borde-control;
+    --border-fill-input-disabled: @borde-control;
+    --border-fill-input-readonly: @borde-control;
+    --border-preview-hover: fade(@verde, 50%);
+    --border-preview-select: @verde;
+    --border-control-focus: @verde;
+    --border-button-pressed-focus: @verde;
+    --border-fill-input-focused: @verde;
+    --border-sidemenu: 0 none;
+
+    // Texto e íconos: la tinta de Degú; lo activo, en verde.
+    --text-normal: @tinta;
+    --text-normal-pressed: @verde;
+    --text-secondary: @tinta-2;
+    --text-tertiary: @tinta-3;
+    --text-link: @verde;
+    --text-link-hover: @verde;
+    --text-link-active: @verde;
+    --text-link-visited: @verde;
+    --text-toolbar-header: @tinta-2;
+    --icon-normal: @tinta-2;
+    --icon-normal-pressed: @verde;
+    --icon-toolbar-header: @tinta-2;
+
+    // Controles con el verde de Degú: casillas, opciones y deslizadores.
+    --chb-border-normal-focus: @verde;
+    --chb-border-checked-focus: @verde;
+    --rb-border-normal-focus: @verde;
+    --rb-border-checked-focus: @verde;
+    --chb-background-normal-hover: @hover;
+    --chb-background-checked-hover: @hover;
+    --rb-background-normal-hover: @hover;
+    --rb-background-checked-hover: @hover;
+    --slider-track-background-filled: @relleno;
+    --slider-thumb-background-normal: @relleno;
+    --slider-thumb-background-hover: @relleno-hover;
+    --slider-thumb-background-active: @relleno-hover;
+
+    // Esquinas redondeadas como en la app: botones y campos de 8, menús y ventanas de 12.
+    --border-radius-toolbar: 12px;
+    --toolbar-tab-radius: 8px;
+    --border-radius-form-control: 8px;
+    --border-radius-checkbox: 5px;
+    --chb-border-radius: 5px;
+    --border-radius-button-base: 8px;
+    --border-radius-button-toolbar: var(--border-radius-button-base);
+    --border-radius-button-normal: var(--border-radius-button-base);
+    --border-radius-button-category: var(--border-radius-button-base);
+    --border-radius-window: 12px;
+    --border-radius-dropdown-menu: 12px;
+    --border-radius-dataview-item: 6px;
+
+    // La letra de Degú, un punto más grande que la de Office y con más interlineado.
+    --font-family-base: @degu-letra;
+    --font-size-base: 12px;
+    --line-height-base: 1.5;
+
+    // Alrededor de la hoja: el fondo de página de Degú; reglas y encabezados de planilla, del mismo tono.
+    --canvas-background: @pagina;
+    --canvas-content-background: @hoja;
+    --canvas-page-border: @hoja-borde;
+    --canvas-ruler-background: @barra;
+    --canvas-ruler-border: @borde;
+    --canvas-ruler-margins-background: @pagina-2;
+    --canvas-ruler-mark: @tinta-3;
+    --canvas-cell-title-text: @tinta-2;
+    --canvas-cell-title-background: @pagina-2;
+    --canvas-cell-title-background-hover: @hover;
+    --canvas-cell-title-background-selected: @suave;
+    --canvas-cell-title-border: @borde;
+    --canvas-cell-title-border-hover: @borde-control;
+    --canvas-cell-title-border-selected: fade(@verde, 50%);
+    --canvas-scroll-thumb: @pagina-2;
+    --canvas-scroll-thumb-hover: @borde-control;
+    --canvas-scroll-thumb-pressed: @tinta-3;
+    --canvas-scroll-thumb-border: @borde;
+    --canvas-scroll-thumb-border-hover: @borde-control;
+    --canvas-scroll-thumb-border-pressed: @tinta-3;
+}
+
+// El mismo selector que `colors-table-white.less` y `colors-table-night.less` (`:root .theme-…`): al compilarse
+// después, gana.
+:root {
+    // CLARO: los tokens claros de Degú.
+    .theme-white {
+        .degu-tema(
+            @verde: #047a64; @relleno: #08826a; @relleno-hover: #097560; @suave: #E7F5F2;
+            @pagina: #f5f7f0; @pagina-2: #f5f7f8; @barra: #FFFFFF; @elevado: #FFFFFF; @hover: #F5F5F5;
+            @borde: #EBECEC; @borde-control: #D9DCDE; @tinta: rgba(0, 0, 0, 0.75); @tinta-2: #677079;
+            @tinta-3: #8A9199; @hoja: #FFFFFF; @hoja-borde: #E4E6E1
+        );
+        --shadow-toolbar: 0 1px 2px 0 rgba(13, 18, 22, 0.06), 0 2px 8px 0 rgba(13, 18, 22, 0.05);
+        --shadow-side-panel: 0 4px 14px -2px rgba(13, 18, 22, 0.10), 0 2px 4px -1px rgba(13, 18, 22, 0.05);
+    }
+    // OSCURO: los tokens oscuros de Degú. La hoja sigue blanca, como en el Modern Dark de Euro-Office y en Word: el documento
+    // es el que es, y lo oscuro es lo que lo rodea.
+    .theme-night {
+        .degu-tema(
+            @verde: #10b88f; @relleno: #08826a; @relleno-hover: #097560; @suave: #132E27;
+            @pagina: #0a0c0b; @pagina-2: #1b201d; @barra: #141816; @elevado: #1f2522; @hover: #272B29;
+            @borde: #262B28; @borde-control: #3A403C; @tinta: rgba(255, 255, 255, 0.92); @tinta-2: rgba(255, 255, 255, 0.64);
+            @tinta-3: rgba(255, 255, 255, 0.45); @hoja: #FFFFFF; @hoja-borde: #3A403C
+        );
+        --shadow-toolbar: 0 1px 2px 0 rgba(0, 0, 0, 0.40), 0 2px 8px 0 rgba(0, 0, 0, 0.30);
+        --shadow-side-panel: 0 4px 14px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 0, 0, 0.30);
+    }
+}
+
+// ── Lo que no se puede con variables ──────────────────────────────────────────────────────────────────────────────
+@import "overrides.less";

@@ -1,0 +1,223 @@
+<!doctype html>
+<!--
+  Los documentos que Degú Desktop puede abrir SIN CONEXIÓN (`oficina_local.py`): las copias de los
+  documentos de Degú (los abiertos en los últimos 30 días y los marcados «Disponible sin conexión»)
+  y los Word y Excel de las carpetas del equipo que la persona le dio a Degú.
+-->
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Degú · Documentos sin conexión</title>
+		<style>
+			:root {
+				--texto: #1d1d1f;
+				--suave: #6e6e73;
+				--borde: #e5e5ea;
+				--acento: #2f7d4f;
+				--aviso: #b25000;
+			}
+			body {
+				margin: 0;
+				font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+				color: var(--texto);
+				background: #fafafa;
+			}
+			.volver {
+				display: inline-block;
+				margin-bottom: 12px;
+				color: var(--acento);
+				text-decoration: none;
+				font-weight: 600;
+			}
+			main {
+				max-width: 820px;
+				margin: 0 auto;
+				padding: 24px 16px 48px;
+			}
+			h1 {
+				font-size: 22px;
+				margin: 0 0 4px;
+			}
+			h2 {
+				font-size: 15px;
+				margin: 28px 0 8px;
+			}
+			p.nota {
+				color: var(--suave);
+				margin: 0 0 16px;
+			}
+			input[type='search'] {
+				width: 100%;
+				font: inherit;
+				padding: 9px 12px;
+				border: 1px solid var(--borde);
+				border-radius: 10px;
+			}
+			ul {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				background: #fff;
+				border: 1px solid var(--borde);
+				border-radius: 12px;
+			}
+			li {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 10px 14px;
+				border-top: 1px solid var(--borde);
+			}
+			li:first-child {
+				border-top: 0;
+			}
+			li a.nombre {
+				color: var(--texto);
+				font-weight: 600;
+				text-decoration: none;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			li .dato {
+				color: var(--suave);
+				margin-left: auto;
+				white-space: nowrap;
+				font-size: 13px;
+			}
+			li .aviso {
+				color: var(--aviso);
+			}
+			li button {
+				font: inherit;
+				font-size: 13px;
+				border: 1px solid var(--borde);
+				background: #fff;
+				border-radius: 8px;
+				padding: 3px 8px;
+				cursor: pointer;
+			}
+			ol.versiones {
+				margin: 0 0 0 32px;
+				padding: 4px 0 10px;
+				color: var(--suave);
+				font-size: 13px;
+			}
+			.vacio {
+				color: var(--suave);
+				padding: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<a id="volver" class="volver" hidden>← Volver a Degú</a>
+			<h1>Documentos sin conexión</h1>
+			<p class="nota">
+				Lo que guardes aquí queda en este equipo. Los documentos de Degú suben solos al volver la
+				conexión; si alguien los cambió mientras tanto, se guardan las dos versiones.
+			</p>
+			<input type="search" id="buscar" placeholder="Buscar por nombre" aria-label="Buscar por nombre" />
+			<h2>De Degú</h2>
+			<ul id="degu"><li class="vacio">Cargando…</li></ul>
+			<h2>De tus carpetas</h2>
+			<ul id="equipo"><li class="vacio">Cargando…</li></ul>
+		</main>
+		<script>
+			(function () {
+				'use strict';
+				var datos = { documentos: [] };
+				var abierto = {};
+
+				function fecha(s) {
+					return s ? new Date(s * 1000).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+				}
+
+				function fila(d) {
+					var li = document.createElement('li');
+					var a = document.createElement('a');
+					a.className = 'nombre';
+					a.href = 'editor.html?doc=' + encodeURIComponent(d.id);
+					a.textContent = d.nombre + '.' + d.ext;
+					li.appendChild(a);
+					var dato = document.createElement('span');
+					dato.className = 'dato' + (d.conflicto || d.pendiente ? ' aviso' : '');
+					dato.textContent = d.conflicto
+						? 'Hay un conflicto: se guardaron las dos versiones'
+						: d.pendiente
+							? 'Sube a Degú al volver la conexión'
+							: fecha(d.modificado);
+					li.appendChild(dato);
+					if (d.versiones > 1) {
+						var b = document.createElement('button');
+						b.textContent = 'Historial (' + d.versiones + ')';
+						b.onclick = function () {
+							abierto[d.id] = !abierto[d.id];
+							pintar();
+						};
+						li.appendChild(b);
+					}
+					return li;
+				}
+
+				function historial(d) {
+					var ol = document.createElement('ol');
+					ol.className = 'versiones';
+					(d.historial || []).forEach(function (v) {
+						var li = document.createElement('li');
+						var a = document.createElement('a');
+						a.href = 'editor.html?doc=' + encodeURIComponent(d.id + '@' + v.n);
+						a.textContent = fecha(v.guardado) + (v.n === 0 ? ' · la que se bajó de Degú' : '');
+						li.appendChild(a);
+						ol.appendChild(li);
+					});
+					return ol;
+				}
+
+				function pintar() {
+					var q = document.getElementById('buscar').value.trim().toLowerCase();
+					['degu', 'equipo'].forEach(function (origen) {
+						var ul = document.getElementById(origen);
+						ul.textContent = '';
+						var lista = datos.documentos.filter(function (d) {
+							return d.origen === origen && (!q || d.nombre.toLowerCase().indexOf(q) >= 0);
+						});
+						lista.forEach(function (d) {
+							ul.appendChild(fila(d));
+							if (abierto[d.id]) ul.appendChild(historial(d));
+						});
+						if (!lista.length) {
+							var li = document.createElement('li');
+							li.className = 'vacio';
+							li.textContent =
+								origen === 'degu'
+									? 'Aún no hay copias. Los documentos que abras en Degú quedan aquí 30 días.'
+									: 'No hay Word ni Excel en las carpetas que le diste a Degú.';
+							ul.appendChild(li);
+						}
+					});
+				}
+
+				document.getElementById('buscar').addEventListener('input', pintar);
+				fetch('../__degu/lista')
+					.then(function (r) {
+						return r.json();
+					})
+					.then(function (j) {
+						datos = j;
+						if (j.web) {
+							var volver = document.getElementById('volver');
+							volver.href = j.web;
+							volver.hidden = false;
+						}
+						pintar();
+					})
+					.catch(function () {
+						datos = { documentos: [] };
+						pintar();
+					});
+			})();
+		</script>
+	</body>
+</html>
